@@ -40,11 +40,11 @@ from modeling import BertMultiwayMatch
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
-
 
 class SwagExample(object):
     """A single training/test example for the SWAG dataset."""
@@ -74,20 +74,19 @@ class SwagExample(object):
 
     def __repr__(self):
         l = [
-            f"swag_id: {self.swag_id}",
+            f"swag_id: %s: {self.swag_id}",
             f"context_sentence: {self.context_sentence}",
             f"start_ending: {self.start_ending}",
             f"ending_0: {self.endings[0]}",
             f"ending_1: {self.endings[1]}",
             f"ending_2: {self.endings[2]}",
-            f"ending_3: {self.endings[3]}",
+            f"ending_3: {self.endings[3]}"
         ]
 
         if self.label is not None:
             l.append(f"label: {self.label}")
 
         return ", ".join(l)
-
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
@@ -208,17 +207,17 @@ class CommonsenseQaProcessor(DataProcessor):
     def get_train_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_csv(os.path.join(data_dir, "train.csv")), "train")
+            self._read_csv(os.path.join(data_dir, "train.csv")))
 
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_csv(os.path.join(data_dir, "valid.csv")), "dev")
+            self._read_csv(os.path.join(data_dir, "valid.csv")))
 
     def get_test_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_csv(os.path.join(data_dir, "test.csv")), "dev")
+            self._read_csv(os.path.join(data_dir, "test.csv")))
 
     def get_examples_from_file(self, input_file):
         return self._create_examples(
@@ -235,10 +234,10 @@ class CommonsenseQaProcessor(DataProcessor):
             guid = record["id"]
             context = record["context"]
             question = record["question"]
-            answer1 = record["answer1"]
-            answer2 = record["answer2"]
-            answer3 = record["answer3"]
-            answer4 = record["answer4"]
+            answer1 = record["answer0"]
+            answer2 = record["answer1"]
+            answer3 = record["answer2"]
+            answer4 = record["answer3"]
             label = record["label"]
 
             examples.append(
@@ -323,7 +322,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
         if example_index < 5:
             logger.info("*** Example ***")
             logger.info(f"swag_id: {example.swag_id}")
-            for choice_idx, (tokens, input_ids, input_mask, segment_ids) in enumerate(choices_features):
+            for choice_idx, (tokens, input_ids, input_mask, segment_ids, doc_len, ques_len, option_len) in enumerate(choices_features):
                 logger.info(f"choice: {choice_idx}")
                 logger.info(f"tokens: {' '.join(tokens)}")
                 logger.info(f"input_ids: {' '.join(map(str, input_ids))}")
@@ -479,16 +478,10 @@ def main():
     args = parser.parse_args()
 
     processors = {
-        "cola": ColaProcessor,
-        "mnli": MnliProcessor,
-        "mrpc": MrpcProcessor,
         "commonsenseqa": CommonsenseQaProcessor,
     }
 
     num_labels_task = {
-        "cola": 2,
-        "mnli": 3,
-        "mrpc": 2,
         "commonsenseqa":4,
     }
 
