@@ -24,7 +24,7 @@ import logging
 import os
 from io import open
 
-from file_utils import cached_path, CONFIG_NAME
+from file_utils import cached_path
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class PretrainedConfig(object):
             config_file = pretrained_model_name_or_path
         # redirect to the cache, if necessary
         try:
-            resolved_config_file = cached_path(config_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+            resolved_config_file = cached_path(config_file, cache_dir=cache_dir)
         except EnvironmentError as e:
             if pretrained_model_name_or_path in cls.pretrained_config_archive_map:
                 logger.error(

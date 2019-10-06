@@ -20,7 +20,7 @@ from __future__ import (absolute_import, division, print_function,
 
 import logging
 
-from .configuration_bert import BertConfig
+from configuration_bert import BertConfig
 
 logger = logging.getLogger(__name__)
 

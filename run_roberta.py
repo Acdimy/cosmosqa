@@ -36,7 +36,7 @@ from modeling import BertForSequenceClassification
 from optimization import BertAdam
 from file_utils import PYTORCH_PRETRAINED_ROBERTA_CACHE
 from modeling_roberta import RobertaForMultipleChoice
-from run_multiway_att import SwagExample, DataProcessor, CommonsenseQaProcessor
+from run_multiway_att import * #SwagExample, DataProcessor, CommonsenseQaProcessor, convert_examples_to_features
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -45,7 +45,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 logger = logging.getLogger(__name__)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -203,8 +203,7 @@ def main():
     # Prepare simple model
     model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
                                                      cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
-                                                         args.local_rank),
-                                                     num_choices=num_labels)
+                                                         args.local_rank))
     if args.fp16:
         model.half()
     model.to(device)
@@ -285,6 +284,19 @@ def main():
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
 
         model.train()
-        kill
+        # Save a trained model                                                                                  
+        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self      
+        output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+
+        for _ in trange(int(args.num_train_epochs), desc="Epoch"):
+            tr_loss = 0
+            nb_tr_examples, nb_tr_steps = 0, 0
+            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+                batch = tuple(t.to(device) for t in batch)
+                input_ids, input_mask, segment_ids, label_ids, doc_len, ques_len, option_len = batch
+
+                loss = model(input_ids,  token_type_ids=segment_ids, attention_mask=input_mask, labels=label_ids)
+                print(loss)
+                kill
 if __name__ == "__main__":
     main()

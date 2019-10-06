@@ -31,7 +31,7 @@ from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
 
 from configuration_utils import PretrainedConfig
-from file_utils import cached_path, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
+from file_utils import cached_path#, WEIGHTS_NAME, TF_WEIGHTS_NAME, TF2_WEIGHTS_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +315,7 @@ class PreTrainedModel(nn.Module):
 
             # redirect to the cache, if necessary
             try:
-                resolved_archive_file = cached_path(archive_file, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+                resolved_archive_file = cached_path(archive_file, cache_dir=cache_dir)
             except EnvironmentError as e:
                 if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
                     logger.error(
