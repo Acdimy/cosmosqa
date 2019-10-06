@@ -31,7 +31,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from tokenization import RoBertaTokenizer
+from tokenization_roberta import RobertaTokenizer
 from modeling import BertForSequenceClassification
 from optimization import BertAdam
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
@@ -39,8 +39,7 @@ from modeling import BertMultiwayMatch
 from run_multiway_att import SwagExample, DataProcessor, CommonsenseQaProcessor
 
 def main():
-        parser = argparse.ArgumentParser()
-
+    parser = argparse.ArgumentParser()
     ## Required parameters                                                                                         
     parser.add_argument("--data_dir",
                         default=None,
