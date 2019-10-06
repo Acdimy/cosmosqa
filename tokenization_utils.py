@@ -23,12 +23,8 @@ import six
 import copy
 from io import open
 
-from .file_utils import cached_path, is_tf_available, is_torch_available
-
-if is_tf_available():
-    import tensorflow as tf
-if is_torch_available():
-    import torch
+from file_utils import cached_path
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -352,7 +348,7 @@ class PreTrainedTokenizer(object):
                 if file_path is None:
                     resolved_vocab_files[file_id] = None
                 else:
-                    resolved_vocab_files[file_id] = cached_path(file_path, cache_dir=cache_dir, force_download=force_download, proxies=proxies)
+                    resolved_vocab_files[file_id] = cached_path(file_path, cache_dir=cache_dir)
         except EnvironmentError as e:
             if pretrained_model_name_or_path in s3_models:
                 logger.error("Couldn't reach server to download vocabulary.")

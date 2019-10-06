@@ -38,6 +38,15 @@ from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modeling import BertMultiwayMatch
 from run_multiway_att import SwagExample, DataProcessor, CommonsenseQaProcessor
 
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+                    datefmt='%m/%d/%Y %H:%M:%S',
+                    level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 def main():
     parser = argparse.ArgumentParser()
     ## Required parameters                                                                                         
@@ -181,7 +190,7 @@ def main():
     num_labels = num_labels_task[task_name]
     label_list = processor.get_labels()
 
-    tokenizer = RoBertaTokenizer.from_pretrained(args.roberta_model, do_lower_case=args.do_lower_case)
+    tokenizer = RobertaTokenizer.from_pretrained(args.roberta_model, do_lower_case=args.do_lower_case)
 
     train_examples = None
     num_train_steps = None
@@ -189,8 +198,7 @@ def main():
         train_examples = processor.get_train_examples(args.data_dir)
         num_train_steps = int(
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
-
-    # to pick up here...
+    
 
 if __name__ == "__main__":
     main()
