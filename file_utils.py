@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 PYTORCH_PRETRAINED_BERT_CACHE = Path(os.getenv('PYTORCH_PRETRAINED_BERT_CACHE',
                                                Path.home() / '.pytorch_pretrained_bert'))
 
+PYTORCH_PRETRAINED_ROBERTA_CACHE = Path(os.getenv('PYTORCH_PRETRAINED_ROBERTA_CACHE',
+                                               Path.home() / '.pytorch_pretrained_roberta'))
 
 def url_to_filename(url: str, etag: str = None) -> str:
     """

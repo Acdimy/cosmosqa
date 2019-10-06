@@ -23,8 +23,8 @@ import logging
 import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
-
-from modeling import BertEmbeddings, BertLayerNorm, BertModel, BertPreTrainedModel, gelu
+from modeling_utils import PreTrainedModel
+from modeling import BertEmbeddings, BertLayerNorm, BertModel, gelu
 from configuration_roberta import RobertaConfig
 #from file_utils import add_start_docstrings
 
@@ -36,6 +36,27 @@ ROBERTA_PRETRAINED_MODEL_ARCHIVE_MAP = {
     'roberta-large-mnli': "https://s3.amazonaws.com/models.huggingface.co/bert/roberta-large-mnli-pytorch_model.bin",
 }
 
+class BertPreTrainedModel(PreTrainedModel):
+    """ An abstract class to handle weights initialization and
+        a simple interface for dowloading and loading pretrained models.
+    """
+    config_class = BertConfig
+    pretrained_model_archive_map = BERT_PRETRAINED_MODEL_ARCHIVE_MAP
+    load_tf_weights = load_tf_weights_in_bert
+    base_model_prefix = "bert"
+
+    def _init_weights(self, module):
+        """ Initialize the weights """
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+        elif isinstance(module, BertLayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
+            
 class RobertaEmbeddings(BertEmbeddings):
     """
     Same as BertEmbeddings with a tiny tweak for positional embeddings indexing.
