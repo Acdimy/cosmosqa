@@ -167,8 +167,10 @@ class RobertaModel(BertModel):
         super(RobertaModel, self).__init__(config)
 
         self.embeddings = RobertaEmbeddings(config)
+        for p in self.embeddings.word_embeddings.parameters():
+            print(p.size())
         self.init_weights()
-
+        
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
         if input_ids[:, 0].sum().item() != 0:
             logger.warning("A sequence with no special tokens has been passed to the RoBERTa model. "
@@ -427,6 +429,7 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None,
                 position_ids=None, head_mask=None):
+
         num_choices = input_ids.shape[1]
 
         flat_input_ids = input_ids.view(-1, input_ids.size(-1))
@@ -447,7 +450,6 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(reshaped_logits, labels)
             outputs = (loss,) + outputs
-
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
 

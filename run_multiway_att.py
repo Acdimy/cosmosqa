@@ -280,7 +280,6 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
     for example_index, example in enumerate(examples):
         context_tokens = tokenizer.tokenize(example.context_sentence)
         start_ending_tokens = tokenizer.tokenize(example.start_ending)
-
         choices_features = []
         for ending_index, ending in enumerate(example.endings):
             # We create a copy of the context tokens in order to be
@@ -297,7 +296,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
             # ending_tokens = start_ending_tokens + ending_tokens
             _truncate_seq_pair(context_tokens_choice, ending_tokens, max_seq_length - 3)
             doc_len = len(context_tokens_choice)
-
+            
             tokens = ["[CLS]"] + context_tokens_choice + ["[SEP]"] + ending_tokens + ["[SEP]"]
             segment_ids = [0] * (len(context_tokens_choice) + 2) + [1] * (len(ending_tokens) + 1)
 
@@ -340,6 +339,84 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
         )
 
     return features
+
+
+def convert_examples_to_roberta_features(examples, tokenizer, max_seq_length,
+                                 is_training):
+    """Loads a data file into a list of `InputBatch`s."""
+    # Each choice will correspond to a sample on which we run the                                                                        
+    # inference. For a given Swag example, we will create the 4                                                                          
+    # following inputs:                                                                                                                  
+    # - <s> context </s> choice_1 </s>                                                                                                   
+    # - <s> context </s> choice_2 </s>                                                                                                   
+    # - <s> context </s> choice_3 </s>                                                                                                   
+    # - <s> context </s> choice_4 </s>                                                                                                   
+
+    features = []
+    for example_index, example in enumerate(examples):
+        context_tokens = tokenizer.tokenize(example.context_sentence)
+        start_ending_tokens = tokenizer.tokenize(example.start_ending)
+        choices_features = []
+        for ending_index, ending in enumerate(example.endings):
+            # We create a copy of the context tokens in order to be                                                                      
+            # able to shrink it according to ending_tokens                                                                               
+            context_tokens_choice = context_tokens[:]
+            ending_tokens = tokenizer.tokenize(ending)
+            option_len = len(ending_tokens)
+            ques_len = len(start_ending_tokens)
+            ending_tokens = start_ending_tokens + ending_tokens
+
+            # Modifies `context_tokens_choice` and `ending_tokens` in                                                                    
+            # place so that the total length is less than the                                                                            
+            # specified length.  Account for [CLS], [SEP], [SEP] with "- 3"                                                              
+            # ending_tokens = start_ending_tokens + ending_tokens                                                                        
+            _truncate_seq_pair(context_tokens_choice, ending_tokens, max_seq_length - 3)
+            doc_len = len(context_tokens_choice)
+
+            tokens = ["<s>"] + context_tokens_choice + ["</s>"] + ending_tokens + ["</s>"]
+            segment_ids = [0] * (len(context_tokens_choice) + 2) + [0] * (len(ending_tokens) + 1)
+
+            input_ids = tokenizer.convert_tokens_to_ids(tokens)
+            input_mask = [1] * len(input_ids)
+
+            # Zero-pad up to the sequence length.                                                                                        
+            padding = [0] * (max_seq_length - len(input_ids))
+            input_ids += padding
+            input_mask += padding
+            segment_ids += padding
+
+            assert len(input_ids) == max_seq_length
+            assert len(input_mask) == max_seq_length
+            assert len(segment_ids) == max_seq_length
+            assert (doc_len + ques_len + option_len) <= max_seq_length
+
+            choices_features.append((tokens, input_ids, input_mask, segment_ids,
+                                     doc_len, ques_len, option_len))
+
+        label = int(example.label)
+        if example_index < 1:
+            logger.info("*** Example ***")
+            logger.info(f"swag_id: {example.swag_id}")
+            for choice_idx, (tokens, input_ids, input_mask, segment_ids, doc_len, ques_len, option_len) in enumerate(choices_features):
+                logger.info(f"choice: {choice_idx}")
+                logger.info(f"tokens: {' '.join(tokens)}")
+                logger.info(f"input_ids: {' '.join(map(str, input_ids))}")
+                logger.info(f"input_mask: {' '.join(map(str, input_mask))}")
+                logger.info(f"segment_ids: {' '.join(map(str, segment_ids))}")
+
+            if is_training:
+                logger.info(f"label: {label}")
+
+        features.append(
+            InputFeatures(
+                example_id=example.swag_id,
+                choices_features=choices_features,
+                label=label
+            )
+        )
+
+    return features
+
 
 
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):
@@ -804,7 +881,6 @@ def main():
             for i in range(len(all_pred_labels)):
                 writer.write(str(i) + "\t" + str(all_anno_labels[i]) + "\t" +
                              str(all_pred_labels[i]) + "\t" + str(all_logits[i]) + "\n")
-
 
 if __name__ == "__main__":
     main()
