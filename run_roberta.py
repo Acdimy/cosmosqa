@@ -37,6 +37,8 @@ from optimization import BertAdam
 from file_utils import PYTORCH_PRETRAINED_ROBERTA_CACHE
 from modeling_roberta import RobertaForMultipleChoice
 from run_multiway_att import * #SwagExample, DataProcessor, CommonsenseQaProcessor, convert_examples_to_features
+import sys
+sys.path.append(".apex")
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -45,7 +47,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 logger = logging.getLogger(__name__)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -214,6 +216,7 @@ def main():
 
         model = DDP(model)
     elif n_gpu > 1:
+        print("We are using", torch.cuda.device_count(), "GPUs!")
         model = torch.nn.DataParallel(model)
 
     # Prepare optimizer                                                                                     
@@ -229,7 +232,7 @@ def main():
         t_total = t_total // torch.distributed.get_world_size()
     if args.fp16:
         try:
-            from apex.optimizers import FP16_Optimizer
+            from apex.contrib.optimizers import FP16_Optimizer
             from apex.optimizers import FusedAdam
         except ImportError:
             raise ImportError(
@@ -237,8 +240,8 @@ def main():
         
         optimizer = FusedAdam(optimizer_grouped_parameters,
                               lr=args.learning_rate,
-                              bias_correction=False,
-                              max_grad_norm=1.0)
+                              bias_correction=False)
+                              #max_grad_norm=1.0)
         if args.loss_scale == 0:
             optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
         else:

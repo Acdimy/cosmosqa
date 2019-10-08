@@ -167,8 +167,6 @@ class RobertaModel(BertModel):
         super(RobertaModel, self).__init__(config)
 
         self.embeddings = RobertaEmbeddings(config)
-        for p in self.embeddings.word_embeddings.parameters():
-            print(p.size())
         self.init_weights()
         
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
