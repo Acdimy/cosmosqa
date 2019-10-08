@@ -1,8 +1,9 @@
 #!/bin/bash
+source activate
 
 task="commonsenseqa"
 
-batchsizes=( 8 )
+batchsizes=( 24 )
 for s in "${batchsizes[@]}"
 do
     learningrates=( 2e-5 )
