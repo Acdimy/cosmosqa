@@ -47,7 +47,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 logger = logging.getLogger(__name__)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -204,8 +204,6 @@ def main():
     model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
                                                      cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
                                                          args.local_rank))
-    #if args.fp16:
-    #    model.half()
     model.to(device)
 
     # Prepare optimizer
@@ -215,6 +213,11 @@ def main():
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
+
+    t_total = num_train_steps
+    if args.local_rank != -1:
+        t_total = t_total // torch.distributed.get_world_size()
+        
     if args.fp16:
         try:
             from apex.optimizers import FusedAdam
@@ -243,10 +246,6 @@ def main():
         model = DDP(model)
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
-
-    t_total = num_train_steps
-    if args.local_rank != -1:
-        t_total = t_total // torch.distributed.get_world_size()
 
     global_step = 0
     nb_tr_steps = 0
@@ -303,7 +302,7 @@ def main():
                         scaled_loss.backward()
                 else:
                     loss.backward()
-
+                
                 tr_loss += loss.item()
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
@@ -317,6 +316,9 @@ def main():
                     optimizer.zero_grad()
                     global_step += 1
 
+                if nb_tr_examples % 1000 == 0:
+                    print("current train loss is %s" % (tr_loss / float(nb_tr_steps)))
+                    
             if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
                 eval_examples = processor.get_dev_examples(args.data_dir)
                 eval_features = convert_examples_to_features(eval_examples, tokenizer,
@@ -353,8 +355,8 @@ def main():
                     option_len = option_len.to(device)
 
                     with torch.no_grad():
-                        tmp_eval_loss, logits = model(input_ids, segment_ids, input_mask,
-                                                      doc_len, ques_len, option_len, label_ids)
+                        tmp_eval_loss, logits = model(input_ids, token_type_ids=segment_ids,
+                                                      attention_mask=input_mask, labels=label_ids)
 
                     logits = logits.detach().cpu().numpy()
                     label_ids = label_ids.to('cpu').numpy()
@@ -374,17 +376,6 @@ def main():
                     if args.do_train:
                         torch.save(model_to_save.state_dict(), output_model_file)
                 model.train()
-
-    # Load a trained model that you have fine-tuned                                                             
-    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
-    model_state_dict = torch.load(output_model_file)
-    model = BertMultiwayMatch.from_pretrained(args.bert_model,
-                                              state_dict=model_state_dict,
-                                              num_choices=num_labels)
-    
-    if args.fp16:
-        model.half()
-    model.to(device)
     
     return 
                 
