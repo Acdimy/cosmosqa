@@ -250,7 +250,8 @@ def main():
     global_step = 0
     nb_tr_steps = 0
     tr_loss = 0
-
+    tr_acc = 0.0
+    
     best_eval_accuracy = 0.0
 
     if args.do_train:
@@ -316,8 +317,13 @@ def main():
                     optimizer.zero_grad()
                     global_step += 1
 
-                if nb_tr_examples % 1000 == 0:
+                logit = logit.detach().cpu().numpy()
+                label_ids = label_ids.to('cpu').numpy()
+                tr_acc += accuracy(logit, label_ids)
+                 
+                if (nb_tr_examples + 1) % 5 == 0:
                     print("current train loss is %s" % (tr_loss / float(nb_tr_steps)))
+                    print("current train accuracy is %s" % (tr_acc / float(nb_tr_examples)))
                     
             if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
                 eval_examples = processor.get_dev_examples(args.data_dir)
