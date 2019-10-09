@@ -47,7 +47,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 logger = logging.getLogger(__name__)
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -321,14 +321,14 @@ def main():
                 label_ids = label_ids.to('cpu').numpy()
                 tr_acc += accuracy(logit, label_ids)
                  
-                if (nb_tr_examples + 1) % 5 == 0:
+                if nb_tr_examples % 600 == 0:
                     print("current train loss is %s" % (tr_loss / float(nb_tr_steps)))
                     print("current train accuracy is %s" % (tr_acc / float(nb_tr_examples)))
                     
             if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
                 eval_examples = processor.get_dev_examples(args.data_dir)
-                eval_features = convert_examples_to_features(eval_examples, tokenizer,
-                                                             args.max_seq_length, True)
+                eval_features = convert_examples_to_roberta_features(eval_examples, tokenizer,
+                                                                     args.max_seq_length, True)
                 logger.info("***** Running evaluation *****")
                 logger.info("  Num examples = %d", len(eval_examples))
                 logger.info("  Batch size = %d", args.eval_batch_size)
