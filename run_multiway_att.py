@@ -364,7 +364,8 @@ def convert_examples_to_roberta_features(examples, tokenizer, max_seq_length,
             ending_tokens = tokenizer.tokenize(ending)
             option_len = len(ending_tokens)
             ques_len = len(start_ending_tokens)
-            ending_tokens = start_ending_tokens + ending_tokens
+    
+            #ending_tokens = start_ending_tokens + ending_tokens
 
             # Modifies `context_tokens_choice` and `ending_tokens` in                                                                    
             # place so that the total length is less than the                                                                            
@@ -373,8 +374,8 @@ def convert_examples_to_roberta_features(examples, tokenizer, max_seq_length,
             _truncate_seq_pair(context_tokens_choice, ending_tokens, max_seq_length - 3)
             doc_len = len(context_tokens_choice)
 
-            tokens = ["<s>"] + context_tokens_choice + ["</s>"] + ending_tokens + ["</s>"]
-            segment_ids = [0] * (len(context_tokens_choice) + 2) + [0] * (len(ending_tokens) + 1)
+            tokens = ["<s>"] + ending_tokens + start_ending_tokens + context_tokens + ["</s>"]
+            segment_ids = [0] * len(tokens) #(len(context_tokens_choice) + 1) + [0] * (len(ending_tokens) + 1)
 
             input_ids = tokenizer.convert_tokens_to_ids(tokens)
             input_mask = [1] * len(input_ids)

@@ -285,8 +285,8 @@ def main():
         output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
 
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
-            tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
+            tr_loss, tr_acc = 0.0, 0.0
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids, doc_len, ques_len, option_len = batch
@@ -382,8 +382,71 @@ def main():
                     if args.do_train:
                         torch.save(model_to_save.state_dict(), output_model_file)
                 model.train()
-    
-    return 
+
+    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+    model_state_dict = torch.load(output_model_file)
+    model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
+                                                     state_dict=model_state_dict)
+    model.to(device)
+    if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+        if args.do_train:
+            eval_examples = processor.get_test_examples(args.data_dir)
+        else:
+            eval_examples = processor.get_dev_examples(args.data_dir)
+            
+        eval_features = convert_examples_to_roberta_features(eval_examples, tokenizer,
+                                                             args.max_seq_length, False)
+        logger.info("***** Running evaluation *****")
+        logger.info("  Num examples = %d", len(eval_examples))
+        logger.info("  Batch size = %d", args.eval_batch_size)
+        all_input_ids = torch.tensor(select_field(eval_features, 'input_ids'), dtype=torch.long)
+        all_input_mask = torch.tensor(select_field(eval_features, 'input_mask'), dtype=torch.long)
+        all_segment_ids = torch.tensor(select_field(eval_features, 'segment_ids'), dtype=torch.long)
+        all_doc_len = torch.tensor(select_field(eval_features, 'doc_len'), dtype=torch.long)
+        all_ques_len = torch.tensor(select_field(eval_features, 'ques_len'), dtype=torch.long)
+        all_option_len = torch.tensor(select_field(eval_features, 'option_len'), dtype=torch.long)
+        all_label = torch.tensor([f.label for f in eval_features], dtype=torch.long)
+        eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label,
+                                  all_doc_len, all_ques_len, all_option_len)
+        # Run prediction for full data
+        eval_sampler = SequentialSampler(eval_data)
+        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
+        model.eval()
+        eval_loss, eval_accuracy = 0, 0
+        nb_eval_steps, nb_eval_examples = 0, 0
+        all_pred_labels = []
+        all_anno_labels = []
+        all_logits = []
+        
+        for input_ids, input_mask, segment_ids, label_ids, doc_len, ques_len, option_len in tqdm(eval_dataloader, desc="Evaluating"):
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            segment_ids = segment_ids.to(device)
+            label_ids = label_ids.to(device)
+            doc_len = doc_len.to(device)
+            ques_len = ques_len.to(device)
+            option_len = option_len.to(device)
+
+            with torch.no_grad():
+                tmp_eval_loss, logits = model(input_ids, token_type_ids=segment_ids,
+                                              attention_mask=input_mask, labels=label_ids)
+
+            logits = logits.detach().cpu().numpy()
+            label_ids = label_ids.to('cpu').numpy()
+
+            output_labels = np.argmax(logits, axis=1)
+            all_pred_labels.extend(output_labels.tolist())
+            all_logits.extend(list(logits))
+            all_anno_labels.extend(list(label_ids))
+            tmp_eval_accuracy = accuracy(logits, label_ids)
+            eval_loss += tmp_eval_loss.mean().item()
+            eval_accuracy += tmp_eval_accuracy
+            nb_eval_examples += input_ids.size(0)
+            nb_eval_steps += 1
+        
+        eval_loss = eval_loss / nb_eval_steps
+        eval_accuracy = eval_accuracy / nb_eval_examples
+        print("the eval accuracy is: " + str(eval_accuracy))
                 
 if __name__ == "__main__":
     main()
