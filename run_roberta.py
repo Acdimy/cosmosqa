@@ -35,7 +35,7 @@ from tokenization_roberta import RobertaTokenizer
 from modeling import BertForSequenceClassification
 from optimization import BertAdam
 from file_utils import PYTORCH_PRETRAINED_ROBERTA_CACHE
-from modeling_roberta import RobertaForMultipleChoice
+from modeling_roberta import RobertaMultiwayMatch, RobertaForMultipleChoice
 from run_multiway_att import * #SwagExample, DataProcessor, CommonsenseQaProcessor, convert_examples_to_features
 import sys
 sys.path.append(".apex")
@@ -201,9 +201,9 @@ def main():
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
 
     # Prepare simple model
-    model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
-                                                     cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
-                                                         args.local_rank))
+    model = RobertaMultiwayMatch.from_pretrained(args.roberta_model,
+                                                 cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
+                                                     args.local_rank))
     model.to(device)
 
     # Prepare optimizer
@@ -290,7 +290,8 @@ def main():
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids, doc_len, ques_len, option_len = batch
-                loss, logit = model(input_ids,  token_type_ids=segment_ids, attention_mask=input_mask, labels=label_ids)
+                loss, logit = model(input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
+                                    doc_len=doc_len, ques_len=ques_len, option_len=option_len, labels=label_ids)
 
                 if n_gpu > 1:
                     loss = loss.mean()  # mean() to average on multi-gpu.                                        

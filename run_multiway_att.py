@@ -342,7 +342,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
 
 
 def convert_examples_to_roberta_features(examples, tokenizer, max_seq_length,
-                                 is_training):
+                                         is_training):
     """Loads a data file into a list of `InputBatch`s."""
     # Each choice will correspond to a sample on which we run the                                                                        
     # inference. For a given Swag example, we will create the 4                                                                          
@@ -369,12 +369,12 @@ def convert_examples_to_roberta_features(examples, tokenizer, max_seq_length,
 
             # Modifies `context_tokens_choice` and `ending_tokens` in                                                                    
             # place so that the total length is less than the                                                                            
-            # specified length.  Account for [CLS], [SEP], [SEP] with "- 3"                                                              
-            # ending_tokens = start_ending_tokens + ending_tokens                                                                        
-            _truncate_seq_pair(context_tokens_choice, ending_tokens, max_seq_length - 3)
+            # specified length.  Account for <s>, </s> with "- 2"                                                              
+            ending_tokens = ending_tokens + start_ending_tokens                                                
+            _truncate_seq_pair(context_tokens_choice, ending_tokens, max_seq_length - 2)
             doc_len = len(context_tokens_choice)
 
-            tokens = ["<s>"] + ending_tokens + start_ending_tokens + context_tokens + ["</s>"]
+            tokens = ["<s>"] + ending_tokens + context_tokens_choice + ["</s>"]
             segment_ids = [0] * len(tokens) #(len(context_tokens_choice) + 1) + [0] * (len(ending_tokens) + 1)
 
             input_ids = tokenizer.convert_tokens_to_ids(tokens)
