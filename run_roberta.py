@@ -363,7 +363,8 @@ def main():
 
                     with torch.no_grad():
                         tmp_eval_loss, logits = model(input_ids, token_type_ids=segment_ids,
-                                                      attention_mask=input_mask, labels=label_ids)
+                                                      attention_mask=input_mask, doc_len=doc_len, ques_len=ques_len,
+                                                      option_len=option_len, labels=label_ids)
 
                     logits = logits.detach().cpu().numpy()
                     label_ids = label_ids.to('cpu').numpy()
@@ -384,10 +385,15 @@ def main():
                         torch.save(model_to_save.state_dict(), output_model_file)
                 model.train()
 
-    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
-    model_state_dict = torch.load(output_model_file)
-    model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
-                                                     state_dict=model_state_dict)
+    #output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+    #model_state_dict = torch.load(output_model_file)
+    #model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
+    #                                                 state_dict=model_state_dict)
+    #model.to(device)
+
+    model = RobertaMultiwayMatch.from_pretrained(args.roberta_model,
+                                                 cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
+                                                     args.local_rank))
     model.to(device)
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         if args.do_train:
@@ -429,8 +435,9 @@ def main():
             option_len = option_len.to(device)
 
             with torch.no_grad():
-                tmp_eval_loss, logits = model(input_ids, token_type_ids=segment_ids,
-                                              attention_mask=input_mask, labels=label_ids)
+                tmp_eval_loss, logits = model(input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
+                                              doc_len=doc_len, ques_len=ques_len, option_len=option_len,
+                                              labels=label_ids)
 
             logits = logits.detach().cpu().numpy()
             label_ids = label_ids.to('cpu').numpy()
