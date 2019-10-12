@@ -84,6 +84,9 @@ def main():
     parser.add_argument("--do_eval",
                         action='store_true',
                         help="Whether to run eval on the dev set.")
+    parser.add_argument("--load_model",
+                        action='store_true',
+                        help="Whether to run eval on the dev set.")
     parser.add_argument("--do_lower_case",
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
@@ -176,8 +179,9 @@ def main():
     if not args.do_train and not args.do_eval:
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
-    if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train:
+    if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train and not args.load_model:
         raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
+
     os.makedirs(args.output_dir, exist_ok=True)
 
     task_name = args.task_name.lower()
@@ -200,8 +204,14 @@ def main():
         num_train_steps = int(
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
 
-    # Prepare simple model
-    model = RobertaMultiwayMatch.from_pretrained(args.roberta_model,
+
+    if args.load_model:
+        output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+        model_state_dict = torch.load(output_model_file)
+        model = RobertaMultiwayMatch.from_pretrained(args.roberta_model,
+                                                     state_dict=model_state_dict)
+    else:
+        model = RobertaMultiwayMatch.from_pretrained(args.roberta_model,
                                                  cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
                                                      args.local_rank))
     model.to(device)
@@ -385,15 +395,14 @@ def main():
                         torch.save(model_to_save.state_dict(), output_model_file)
                 model.train()
 
-    #output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
-    #model_state_dict = torch.load(output_model_file)
+    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+    model_state_dict = torch.load(output_model_file)
     #model = RobertaForMultipleChoice.from_pretrained(args.roberta_model,
     #                                                 state_dict=model_state_dict)
     #model.to(device)
 
     model = RobertaMultiwayMatch.from_pretrained(args.roberta_model,
-                                                 cache_dir=PYTORCH_PRETRAINED_ROBERTA_CACHE / 'distributed_{}'.format(
-                                                     args.local_rank))
+                                                 state_dict=model_state_dict)
     model.to(device)
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         if args.do_train:
