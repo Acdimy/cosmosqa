@@ -36,7 +36,8 @@ from modeling import BertForSequenceClassification
 from optimization import BertAdam
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modeling import BertMultiwayMatch
-
+import sys
+sys.path.append(".apex")
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
@@ -501,6 +502,9 @@ def main():
     parser.add_argument("--do_eval",
                         action='store_true',
                         help="Whether to run eval on the dev set.")
+    parser.add_argument("--load_model",
+                        action='store_true',
+                        help="Whether to run eval on the dev set.")
     parser.add_argument("--do_lower_case",
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
@@ -617,14 +621,50 @@ def main():
         num_train_steps = int(
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
 
-    # Prepare model
-    model = BertMultiwayMatch.from_pretrained(args.bert_model,
-                                              cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / 'distributed_{}'.format(
-                                                  args.local_rank),
-                                              num_choices=num_labels)
-    if args.fp16:
-        model.half()
+    if args.load_model:
+        output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+        model_state_dict = torch.load(output_model_file)
+        model = BertMultiwayMatch.from_pretrained(args.bert_model,
+                                                  state_dict=model_state_dict)
+    else:
+        # Prepare model
+        model = BertMultiwayMatch.from_pretrained(args.bert_model,
+                                                  cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / 'distributed_{}'.format(
+                                                      args.local_rank),
+                                                  num_choices=num_labels)
     model.to(device)
+
+    
+    # Prepare optimizer
+    param_optimizer = list(model.named_parameters())
+    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]
+    
+    t_total = num_train_steps
+    if args.local_rank != -1:
+        t_total = t_total // torch.distributed.get_world_size()
+        
+    if args.fp16:
+        try:
+            from apex.optimizers import FusedAdam
+            from apex import amp
+        except ImportError:
+            raise ImportError(
+                "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
+        optimizer = FusedAdam(optimizer_grouped_parameters,
+                              lr=args.learning_rate,
+                              bias_correction=False)
+        model, optimizer = amp.initialize(model, optimizer, opt_level= "O1")
+            
+    else:
+        optimizer = BertAdam(optimizer_grouped_parameters,
+                             lr=args.learning_rate,
+                             warmup=args.warmup_proportion,
+                             t_total=t_total)
+        
     if args.local_rank != -1:
         try:
             from apex.parallel import DistributedDataParallel as DDP
@@ -635,39 +675,6 @@ def main():
         model = DDP(model)
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
-
-    # Prepare optimizer
-    param_optimizer = list(model.named_parameters())
-    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    ]
-    t_total = num_train_steps
-    if args.local_rank != -1:
-        t_total = t_total // torch.distributed.get_world_size()
-    if args.fp16:
-        try:
-            from apex.optimizers import FP16_Optimizer
-            from apex.optimizers import FusedAdam
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-
-        optimizer = FusedAdam(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              bias_correction=False,
-                              max_grad_norm=1.0)
-        if args.loss_scale == 0:
-            optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
-        else:
-            optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
-
-    else:
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                             lr=args.learning_rate,
-                             warmup=args.warmup_proportion,
-                             t_total=t_total)
 
     global_step = 0
     nb_tr_steps = 0
@@ -706,7 +713,7 @@ def main():
         output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
 
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
-            tr_loss = 0
+            tr_loss, tr_acc = 0.0, 0.0
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(device) for t in batch)
@@ -719,7 +726,8 @@ def main():
                     loss = loss / args.gradient_accumulation_steps
 
                 if args.fp16:
-                    optimizer.backward(loss)
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
                 else:
                     loss.backward()
 
@@ -735,6 +743,14 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
+
+                logits = logits.detach().cpu().numpy()
+                label_ids = label_ids.to('cpu').numpy()
+                tr_acc += accuracy(logits, label_ids)
+                
+                if nb_tr_examples % 600 == 0:
+                    print("current train loss is %s" % (tr_loss / float(nb_tr_steps)))
+                    print("current train accuracy is %s" % (tr_acc / float(nb_tr_examples)))
 
             if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
                 eval_examples = processor.get_dev_examples(args.data_dir)
@@ -801,8 +817,6 @@ def main():
     model = BertMultiwayMatch.from_pretrained(args.bert_model,
                                               state_dict=model_state_dict,
                                               num_choices=num_labels)
-    if args.fp16:
-        model.half()
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):

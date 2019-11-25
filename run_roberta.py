@@ -327,7 +327,7 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
-
+                    
                 logit = logit.detach().cpu().numpy()
                 label_ids = label_ids.to('cpu').numpy()
                 tr_acc += accuracy(logit, label_ids)
