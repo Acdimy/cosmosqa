@@ -218,7 +218,7 @@ class CommonsenseQaProcessor(DataProcessor):
     def get_test_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_csv(os.path.join(data_dir, "test.csv")))
+            self._read_csv(os.path.join(data_dir, "test_no_label.csv")))
 
     def get_examples_from_file(self, input_file):
         return self._create_examples(
@@ -239,8 +239,12 @@ class CommonsenseQaProcessor(DataProcessor):
             answer2 = record["answer1"]
             answer3 = record["answer2"]
             answer4 = record["answer3"]
-            label = record["label"]
-
+            try:
+                label = record["label"]
+            except:
+                # test data has no label
+                label = "0"
+                
             examples.append(
                 SwagExample(swag_id=guid,
                  context_sentence=context,

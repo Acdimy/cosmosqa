@@ -405,20 +405,23 @@ def main():
         if args.do_train:
             eval_examples = processor.get_test_examples(args.data_dir)
         else:
-            eval_examples = processor.get_dev_examples(args.data_dir)
-            
+            eval_examples = processor.get_test_examples(args.data_dir)
+
+        sample_ids = [x.swag_id for x in eval_examples]
         eval_features = convert_examples_to_roberta_features(eval_examples, tokenizer,
                                                              args.max_seq_length, False)
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", args.eval_batch_size)
+        
         all_input_ids = torch.tensor(select_field(eval_features, 'input_ids'), dtype=torch.long)
         all_input_mask = torch.tensor(select_field(eval_features, 'input_mask'), dtype=torch.long)
         all_segment_ids = torch.tensor(select_field(eval_features, 'segment_ids'), dtype=torch.long)
         all_doc_len = torch.tensor(select_field(eval_features, 'doc_len'), dtype=torch.long)
         all_ques_len = torch.tensor(select_field(eval_features, 'ques_len'), dtype=torch.long)
         all_option_len = torch.tensor(select_field(eval_features, 'option_len'), dtype=torch.long)
-        all_label = torch.tensor([f.label for f in eval_features], dtype=torch.long)
+        # use random label as gold for the test set
+        all_label = torch.tensor([0 for f in eval_features], dtype=torch.long)
         eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label,
                                   all_doc_len, all_ques_len, all_option_len)
         # Run prediction for full data
@@ -457,10 +460,13 @@ def main():
             eval_accuracy += tmp_eval_accuracy
             nb_eval_examples += input_ids.size(0)
             nb_eval_steps += 1
+
+        write_file = open("prediction.lst", "w")
+        write_file.write("id,label")
+        for i, l in zip(sample_ids, all_pred_labels):
+            write_file.write("%s,%s" % (i, l))
+            write_file.write("\n")
+        write_file.close()
         
-        eval_loss = eval_loss / nb_eval_steps
-        eval_accuracy = eval_accuracy / nb_eval_examples
-        print("the eval accuracy is: " + str(eval_accuracy))
-                
 if __name__ == "__main__":
     main()
